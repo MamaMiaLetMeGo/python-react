@@ -1,130 +1,145 @@
-import { useState, useEffect } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LoginForm from './components/auth/LoginForm';
+import RegisterForm from './components/auth/RegisterForm';
+import PostForm from './components/blog/PostForm';
+import { logout } from './services/auth';
 
-// Define the API base URL
-const API_URL = 'http://127.0.0.1:5000';
+const Navigation = () => {
+  const { user, setUser } = useAuth();
 
-const BlogPost = ({ post }) => (
-  <div className="bg-white rounded-lg shadow-md p-6 mb-4">
-    <h2 className="text-2xl font-bold mb-2">{post.title}</h2>
-    <p className="text-gray-600 mb-4">{post.content}</p>
-    <div className="text-sm text-gray-500">
-      Posted by {post.author} on {post.date}
-    </div>
-  </div>
-);
-
-const NewPostForm = ({ onSubmit, isSubmitting }) => {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit({ title, content });
-    setTitle('');
-    setContent('');
+  const handleLogout = () => {
+    logout();
+    setUser(null);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-bold mb-4">Create New Post</h2>
-      <div className="mb-4">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Post title"
-          className="w-full p-2 border rounded"
-          required
-        />
+    <nav className="bg-gray-800 p-4">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          <Link to="/" className="text-white font-bold text-xl">
+            Blog App
+          </Link>
+          <Link to="/" className="text-gray-300 hover:text-white">
+            Home
+          </Link>
+          {user && (
+            <Link to="/create-post" className="text-gray-300 hover:text-white">
+              Create Post
+            </Link>
+          )}
+        </div>
+        <div className="flex items-center space-x-4">
+          {user ? (
+            <>
+              <span className="text-gray-300">Welcome, {user.username}</span>
+              <button
+                onClick={handleLogout}
+                className="text-gray-300 hover:text-white"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="text-gray-300 hover:text-white">
+                Login
+              </Link>
+              <Link to="/register" className="text-gray-300 hover:text-white">
+                Register
+              </Link>
+            </>
+          )}
+        </div>
       </div>
-      <div className="mb-4">
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Write your post here..."
-          className="w-full p-2 border rounded h-32"
-          required
-        />
+    </nav>
+  );
+};
+
+const Home = () => {
+  const [posts, setPosts] = React.useState([]);
+  const [selectedCategory, setSelectedCategory] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/posts${selectedCategory ? `?category=${selectedCategory}` : ''}`);
+        const data = await response.json();
+        setPosts(data);
+      } catch (error) {
+        console.error('Error fetching posts:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts();
+  }, [selectedCategory]);
+
+  if (loading) {
+    return <div className="text-center mt-8">Loading...</div>;
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto mt-8 px-4">
+      <div className="mb-6">
+        <select
+          value={selectedCategory || ''}
+          onChange={(e) => setSelectedCategory(e.target.value || null)}
+          className="px-4 py-2 border rounded-lg"
+        >
+          <option value="">All Categories</option>
+          {/* Add categories dynamically based on your data */}
+          <option value="tech">Tech</option>
+          <option value="news">News</option>
+          <option value="tutorial">Tutorial</option>
+        </select>
       </div>
-      <button 
-        type="submit"
-        disabled={isSubmitting}
-        className={`${
-          isSubmitting ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'
-        } text-white px-4 py-2 rounded`}
-      >
-        {isSubmitting ? 'Publishing...' : 'Publish Post'}
-      </button>
-    </form>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {posts.map((post) => (
+          <div key={post.id} className="bg-white p-6 rounded-lg shadow-md">
+            <h2 className="text-xl font-bold mb-2">{post.title}</h2>
+            <p className="text-gray-600 mb-4">{post.content}</p>
+            <div className="flex items-center justify-between text-sm text-gray-500">
+              <span>By {post.author}</span>
+              <span>{post.date}</span>
+            </div>
+            {post.categories && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {post.categories.map((category, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                  >
+                    {category}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 
 const App = () => {
-  const [posts, setPosts] = useState([]);
-  const [error, setError] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    console.log('Fetching posts from:', `${API_URL}/api/posts`);
-    fetch(`${API_URL}/api/posts`)
-      .then(response => {
-        if (!response.ok) throw new Error('Failed to fetch posts');
-        return response.json();
-      })
-      .then(data => {
-        console.log('Received posts:', data);
-        setPosts(data);
-      })
-      .catch(error => {
-        console.error('Error fetching posts:', error);
-        setError('Failed to load posts: ' + error.message);
-      });
-  }, []);
-
-  const handleNewPost = async (postData) => {
-    setIsSubmitting(true);
-    try {
-      const response = await fetch(`${API_URL}/api/posts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(postData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create post');
-      }
-
-      const newPost = await response.json();
-      setPosts([newPost, ...posts]);
-    } catch (error) {
-      setError('Failed to create post: ' + error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-2xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-center mb-8">My Blog</h1>
-        
-        <NewPostForm onSubmit={handleNewPost} isSubmitting={isSubmitting} />
-        
-        {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded mb-4">
-            {error}
-          </div>
-        )}
-        
-        <div className="space-y-6">
-          {posts.map(post => (
-            <BlogPost key={post.id} post={post} />
-          ))}
+    <Router>
+      <AuthProvider>
+        <div className="min-h-screen bg-gray-100">
+          <Navigation />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<LoginForm />} />
+            <Route path="/register" element={<RegisterForm />} />
+            <Route path="/create-post" element={<PostForm />} />
+          </Routes>
         </div>
-      </div>
-    </div>
+      </AuthProvider>
+    </Router>
   );
 };
 
